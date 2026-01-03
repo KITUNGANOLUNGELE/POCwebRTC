@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebRTC python and js</title>
+  </head>
+  <body>
+    <h2>WebRTC python and js</h2>
+    <button onclick="start()">Connecter</button>
+    <p id="status">Statut : déconnecté</p>
+    <div style="display: flex; justify-content:center; align-items:center">
+      <video id="localVideo" autoplay muted></video>
+      <video id="remoteVideo" autoplay></video>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+      
+      async function start() {
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        const pc = new RTCPeerConnection();
+        const dc = pc.createDataChannel("chat");
+
+        // --- Local video ---
+        const localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        document.getElementById("localVideo").srcObject = localStream;
+        localStream
+          .getTracks()
+          .forEach((track) => pc.addTrack(track, localStream));
+
+        // --- DataChannel ---
+        dc.onmessage = (ev) => {
+          console.log("Message reçu :", ev.data);
+          document.getElementById(
+            "messages"
+          ).innerHTML += `<div>${ev.data}</div>`;
+        };
+        dc.onopen = () => {
+          console.log("Channel ouvert");
+          dc.send("Salut serveur !");
+        };
+
+        // --- ICE Candidate ---
+        pc.onicecandidate = async (ev) => {
+          if (ev.candidate) {
+            ws.send(JSON.stringify({ type: "ice", candidate: ev.candidate }));
+          }
+        };
+
+        // --- Remote track ---
+        const remoteVideo = document.getElementById("remoteVideo");
+        pc.ontrack = (ev) => {
+          remoteVideo.srcObject = ev.streams[0];
+        };
+
+        // --- Connexion WebSocket ---
+        ws.onopen = async () => {
+          document.getElementById("status").textContent = "Connecté ✅";
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({ type: offer.type, sdp: offer.sdp }));
+        };
+
+        ws.onmessage = async (ev) => {
+          const data = JSON.parse(ev.data);
+          if (data.type === "answer") {
+            await pc.setRemoteDescription({ type: data.type, sdp: data.sdp });
+          } else if (data.type === "ice") {
+            await pc.addIceCandidate(data.candidate);
+          }
+        };
+      }
+    </script>
+  </body>
+</html>
