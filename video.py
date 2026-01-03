@@ -15,11 +15,11 @@ class BnWTrack(VideoStreamTrack):
         self.scale = scale
 
     async def recv(self):
-        frame = await self.track.recv()  # frame originale
+        frame = await self.track.recv()  
         img = frame.to_ndarray(format="bgr24")
         self.frame_count += 1
 
-        # On ne traite qu'une frame sur skip_frames
+        
         h, w = img.shape[:2]
         small = cv2.resize(img, (int(w*self.scale), int(h*self.scale)))
         cv2.putText(small, "image from openCV", (10,20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255), 2)
